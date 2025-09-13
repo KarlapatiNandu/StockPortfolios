@@ -8,12 +8,24 @@ public class Stock {
     private int quantity;
     private double purchasePrice;
 
+    private Stock() {} // for jackson
+
     Stock(String tickerSymbol, String companyName, int quantity, double purchasePrice){
         this.tickerSymbol = tickerSymbol;
         this.companyName = companyName;
         this.purchasePrice = purchasePrice;
         this.quantity = quantity;
     }
+
+
+    // updating the shares of a stock which is already present:
+    public void addShares(int additionalShares,double priceOfNewShares){
+        double totalCost = (this.quantity * this.purchasePrice) + (additionalShares * priceOfNewShares);
+        this.quantity += additionalShares;
+        this.purchasePrice = totalCost/this.quantity; // average price of each share is stored as purchaseprice
+    }
+
+
 
     // getter functions:
     public String getTickerSymbol(){
