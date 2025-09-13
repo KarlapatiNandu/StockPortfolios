@@ -1,5 +1,6 @@
 package com.nkfun.portfolio;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,21 +8,43 @@ public class Portfolio {
     
     private List<Stock> stocks;
 
-    private final MarketDataService marketDataService;
+    @JsonIgnore
+    private MarketDataService marketDataService;
     // Initialising a portfolio -> implies initialising a array list of stocks
+    
+    // No argument constructor for jackson for deserialization
+    private Portfolio(){
+        this.stocks = new ArrayList<>();
+    }
+
     Portfolio(MarketDataService marketDataService){
         this.marketDataService = marketDataService;
         this.stocks = new ArrayList<>();
     }
 
+    // setting a marketDataService after loading a portfolio for live access of the shares
+    public void setMarketDataService(MarketDataService marketDataService){
+        this.marketDataService = marketDataService;
+    }
     // Adding a new stock to our current list:
     public void addStock(Stock stock){
+        for(Stock existingStock : stocks){
+            if(existingStock.getTickerSymbol().equals(stock.getTickerSymbol())){
+                // Since the stock already exists, updating the quanitity:
+                existingStock.addShares(stock.getQuantity(),stock.getPurchasePrice());
+                System.out.println("Updated : " + stock.getQuantity() + " shares of " + stock.getTickerSymbol());
+                return;
+            }
+        }
         this.stocks.add(stock);
-        System.out.println("Added: " + stock.getQuantity() + " shares of " + stock.getTickerSymbol());
-
+        System.out.println("Added : " + stock.getQuantity() + " shares of " + stock.getTickerSymbol());
     }
 
     public double calculateTotalValue(){
+        if(marketDataService == null){
+            System.err.println("MarketDataService is not set, value cannot be computed");
+            return 0.0;
+        }
         double totalValue = 0.0;
         for(Stock stock : stocks){
             double currentPrice = marketDataService.getPrice(stock.getTickerSymbol());
@@ -37,7 +60,7 @@ public class Portfolio {
         return totalValue;
     }
 
-    public List<Stock> geStocks(){
+    public List<Stock> getStocks(){
         return stocks;
     }
 
