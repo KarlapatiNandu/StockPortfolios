@@ -3,8 +3,8 @@ package com.nkfun.portfolio;
 public class Stock {
 
     // Attributes of a stock
-    private final String tickerSymbol;
-    private final String companyName;
+    private String tickerSymbol;
+    private String companyName;
     private int quantity;
     private double purchasePrice;
 

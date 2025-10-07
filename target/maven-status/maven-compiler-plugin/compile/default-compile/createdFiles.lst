@@ -1,3 +1,7 @@
+com\nkfun\portfolio\MarketDataService.class
+com\nkfun\portfolio\AnalysisEngine.class
+com\nkfun\portfolio\Portfolio.class
 com\nkfun\portfolio\Stock.class
 com\nkfun\portfolio\App.class
-com\nkfun\portfolio\Portfolio.class
+com\nkfun\portfolio\PortfolioStorageService.class
+com\nkfun\portfolio\AlphaVantageService.class

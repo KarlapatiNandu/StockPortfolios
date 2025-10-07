@@ -1,0 +1,18 @@
+{
+  "stocks" : [ {
+    "tickerSymbol" : "AAPL",
+    "companyName" : "Apple Inc",
+    "quantity" : 70,
+    "purchasePrice" : 64.75714285714285
+  }, {
+    "tickerSymbol" : "GOOGL",
+    "companyName" : "Alphabet Inc",
+    "quantity" : 50,
+    "purchasePrice" : 1.8
+  }, {
+    "tickerSymbol" : "TSLA",
+    "companyName" : "Tesla Inc",
+    "quantity" : 100,
+    "purchasePrice" : 1.55
+  } ]
+}

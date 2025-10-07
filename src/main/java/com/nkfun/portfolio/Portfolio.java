@@ -47,7 +47,9 @@ public class Portfolio {
         }
         double totalValue = 0.0;
         for(Stock stock : stocks){
+            // fetching the live share price for the current stock
             double currentPrice = marketDataService.getPrice(stock.getTickerSymbol());
+            // updating the current total of the portfolio:
             totalValue+=currentPrice*stock.getQuantity();
             System.out.println("Stock = [" + stock.getTickerSymbol() + ", currentPrice = " + currentPrice + "]");
             // Adding a delay for fetching the data from the api -> 5 calls for minute
