@@ -37,7 +37,7 @@ def analyze_stock(ticker):
 
         #Generating future days:
         last_day = df['days'].iloc[-1]
-        future_days = np.arange(last_day+1 , last_day+31) # 15Days into the future :)
+        future_days = np.arange(last_day+1 , last_day+31) # 30 Days into the future :)
         future_X = poly_features.transform(future_days.reshape(-1,1))
 
         predicted_prices = model.predict(future_X)
