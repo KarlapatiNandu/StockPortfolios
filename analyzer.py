@@ -6,6 +6,15 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
+import datetime
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+# Ensure the lexicon is downloaded quietly (only downloads if missing)
+try:
+    nltk.data.find('sentiment/vader_lexicon.zip')
+except LookupError:
+    nltk.download('vader_lexicon', quiet=True)
 
 try:
     # statsmodels used for ARIMA implementation
@@ -16,6 +25,76 @@ except Exception:
     ARIMA = None
     # we'll print a helpful message later if these aren't available
 
+def get_recent_news(ticker, days=3):
+    """
+    Fetches news for the given ticker and filters for articles 
+    published within the last specified number of days.
+    Includes a fallback to return all available news if the filter is too strict.
+    """
+    print(f"[*] Fetching news for {ticker}...")
+    
+    ticker_obj = yf.Ticker(ticker)
+    news = ticker_obj.news
+    
+    if not news:
+        print("[-] No news data found for this ticker from Yahoo Finance.")
+        return []
+
+    # Set up our time threshold (UTC)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    threshold = now - datetime.timedelta(days=days)
+    
+    recent_articles = []
+    
+    for art in news:
+        if 'providerPublishTime' in art:
+            pub_time = datetime.datetime.fromtimestamp(
+                art['providerPublishTime'], datetime.timezone.utc
+            )
+            if pub_time > threshold:
+                recent_articles.append(art)
+                
+    # --- NEW FALLBACK LOGIC ---
+    if len(recent_articles) == 0:
+        print(f"[-] No articles strictly within the last {days} days.")
+        print(f"[*] Falling back to the {len(news)} most recent articles provided by the API.")
+        return news
+    # --------------------------
+        
+    print(f"[+] Found {len(recent_articles)} articles from the last {days} days.")
+    return recent_articles
+
+def calculate_vader_sentiment(articles):
+    """
+    Takes a list of news article dictionaries, extracts the titles,
+    and returns an average VADER compound sentiment score (-1 to 1).
+    """
+    if not articles:
+        print("[-] No articles to analyze. Defaulting sentiment to 0 (Neutral).")
+        return 0.0
+        
+    sia = SentimentIntensityAnalyzer()
+    scores = []
+    
+    for art in articles:
+        # Try to get the title directly, or from a nested 'content' dictionary if Yahoo changed it
+        title = art.get('title')
+        if not title and 'content' in art:
+            title = art['content'].get('title', '')
+            
+        if title:
+            score = sia.polarity_scores(title)['compound']
+            scores.append(score)
+            print(f"    -> Scored: {score:.4f} | Headline: {title[:50]}...")
+            
+    if not scores:
+        print("[-] Could not extract valid text from the API payload. Defaulting sentiment to 0 (Neutral).")
+        return 0.0
+        
+    avg_sentiment = sum(scores) / len(scores)
+    print(f"[+] Average Sentiment Score for recent news: {avg_sentiment:.4f}")
+    return avg_sentiment
+
 def analyze_stock(ticker):
     #Fetching historical data for the ticker symbol entered
     try:
@@ -24,6 +103,18 @@ def analyze_stock(ticker):
         if stock_data.empty:
             print(f"Error, no data found for the tickerSymbol '{ticker}', might be an invalid symbol")
             return
+        
+        # === INJECT THE SENTIMENT PIPELINE HERE ===
+        print("\n--- RUNNING SENTIMENT PIPELINE ---")
+        recent_news = get_recent_news(ticker, days=3)
+        sentiment_score = calculate_vader_sentiment(recent_news)
+        print("----------------------------------\n")
+        # ==========================================
+        
+        # Flatten MultiIndex columns if they exist (yfinance sometimes returns them for single tickers)
+        if isinstance(stock_data.columns, pd.MultiIndex):
+            stock_data.columns = stock_data.columns.get_level_values(0)
+
         #Simple mean average - sma of closing prices over 50days and 200 days
         stock_data['SMA_50'] = stock_data['Close'].rolling(window=50).mean()
         stock_data['SMA_200'] = stock_data['Close'].rolling(window=200).mean()
@@ -32,7 +123,7 @@ def analyze_stock(ticker):
         df = stock_data[['Close']].copy()
 
         # Use last 30 trading days as the test period
-        test_horizon = 30
+        test_horizon = 20
         if len(df) < test_horizon + 10:
             print("Not enough data to perform a 30-day backtest. Need at least 40 trading days.")
             return
@@ -42,7 +133,7 @@ def analyze_stock(ticker):
 
         # ---------------- Polynomial baseline (similar to original, but trained on window before cutoff)
         # We'll use up to last 60 days of training data to fit the polynomial for fairness with original code
-        poly_window = 60
+        poly_window = 120
         poly_train = train.tail(poly_window).copy()
         poly_train = poly_train.reset_index(drop=True)
         poly_train['day_index'] = np.arange(len(poly_train))
@@ -99,9 +190,17 @@ def analyze_stock(ticker):
                 forecasted_prices = []
                 current_price = last_price
                 
+                # --- SENTIMENT ADJUSTMENT ---
+                # How much power sentiment has over the daily price. 
+                # 0.001 means a perfect 1.0 sentiment score adds a 0.1% daily drift.
+                sentiment_weight = 0.022 
+                
                 for ret in return_forecast:
-                    # Convert log return to price multiplier and apply
-                    price_multiplier = np.exp(ret)
+                    # Nudge the predicted return up or down based on news
+                    adjusted_ret = ret + (sentiment_score * sentiment_weight)
+                    
+                    # Convert adjusted log return to price multiplier and apply
+                    price_multiplier = np.exp(adjusted_ret)
                     next_price = current_price * price_multiplier
                     forecasted_prices.append(next_price)
                     current_price = next_price
@@ -134,7 +233,7 @@ def analyze_stock(ticker):
         plt.plot(test.index, test['Close'], label='Test (actual)', color='black')
         plt.plot(poly_pred_series.index, poly_pred_series.values, '--', label='Polynomial forecast', color='red')
         if arima_pred_series is not None:
-            plt.plot(arima_pred_series.index, arima_pred_series.values, '--', label=f'ARIMA{arima_order} forecast', color='green')
+            plt.plot(arima_pred_series.index, arima_pred_series.values, '--', label=f'Sentiment-Adjusted ARIMA{arima_order}', color='green')
 
         plt.plot(stock_data['SMA_50'], label='50-Day SMA')
         plt.plot(stock_data['SMA_200'], label='200-Day SMA')
